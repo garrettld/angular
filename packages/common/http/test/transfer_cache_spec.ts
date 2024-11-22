@@ -47,7 +47,11 @@ type RequestBody =
   | null;
 
 describe('TransferCache', () => {
-  @Component({selector: 'test-app-http', template: 'hello'})
+  @Component({
+    selector: 'test-app-http',
+    template: 'hello',
+    standalone: false,
+  })
   class SomeComponent {}
 
   describe('withHttpTransferCache', () => {
