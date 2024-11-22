@@ -58,6 +58,7 @@ export {
   HttpTransferCacheOptions,
   withHttpTransferCache as ɵwithHttpTransferCache,
   HTTP_TRANSFER_CACHE_ORIGIN_MAP,
+  HTTP_TRANSFER_CACHE_URL_TRANSFORMER,
 } from './src/transfer_cache';
 export {HttpXhrBackend} from './src/xhr';
 export {HttpXsrfTokenExtractor} from './src/xsrf';

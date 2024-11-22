@@ -80,9 +80,38 @@ export type HttpTransferCacheOptions = {
  * ```
  *
  * @publicApi
+ * @deprecated Use HTTP_TRANSFER_CACHE_URL_TRANSFORMER instead for more flexible mapping of server-side URLs to client-side URLs.
  */
 export const HTTP_TRANSFER_CACHE_ORIGIN_MAP = new InjectionToken<Record<string, string>>(
   ngDevMode ? 'HTTP_TRANSFER_CACHE_ORIGIN_MAP' : '',
+);
+
+/**
+ * If your application uses different HTTP URLs to make API calls (via `HttpClient`) on the server and
+ * on the client, the `HTTP_TRANSFER_CACHE_URL_TRANSFORMER` token allows you to transform the URL used by
+ * the client to the URL used by the server, so that `HttpTransferCache` feature can recognize those
+ * requests as the same ones and reuse the data cached on the server during hydration on the client.
+ *
+ * **Important note**: the `HTTP_TRANSFER_CACHE_URL_TRANSFORMER` token should *only* be provided in
+ * the *server* code of your application (typically in the `app.server.config.ts` script). Angular throws an
+ * error if it detects that the token is defined while running on the client.
+ *
+ * @usageNotes
+ *
+ * When the same API endpoint is accessed via `http://internal-domain.com:8080/path` on the server and
+ * via `https://external-domain.com/api/path` on the client, you can use the following configuration:
+ * ```typescript
+ * // in app.server.config.ts
+ * {
+ *     provide: HTTP_TRANSFER_CACHE_URL_TRANSFORMER,
+ *     useValue: (url: string) => url.replace('http://internal-domain.com:8080/path', 'https://external-domain.com/api/path')
+ * }
+ * ```
+ *
+ * @publicApi
+ */
+export const HTTP_TRANSFER_CACHE_URL_TRANSFORMER = new InjectionToken<(origin: string) => string>(
+  ngDevMode ? 'HTTP_TRANSFER_CACHE_URL_TRANSFORMER' : '',
 );
 
 /**
@@ -147,7 +176,7 @@ export function transferCacheInterceptorFn(
 
   const transferState = inject(TransferState);
 
-  const originMap: Record<string, string> | null = inject(HTTP_TRANSFER_CACHE_ORIGIN_MAP, {
+  const originMap = inject(HTTP_TRANSFER_CACHE_ORIGIN_MAP, {
     optional: true,
   });
   const isServer = isPlatformServer(inject(PLATFORM_ID));
@@ -160,8 +189,21 @@ export function transferCacheInterceptorFn(
           'server code of the application.',
     );
   }
+  const requestUrlTransformer = inject(HTTP_TRANSFER_CACHE_URL_TRANSFORMER, {optional: true});
+  if (requestUrlTransformer && !isServer) {
+    throw new RuntimeError(
+      RuntimeErrorCode.HTTP_URL_TRANSFORMER_USED_IN_CLIENT,
+      ngDevMode &&
+        'Angular detected that the `HTTP_TRANSFER_CACHE_URL_TRANSFORMER` token is configured and ' +
+          'present in the client side code. Please ensure that this token is only provided in the ' +
+          'server code of the application.',
+    );
+  }
 
-  const requestUrl = isServer && originMap ? mapRequestOriginUrl(req.url, originMap) : req.url;
+  let requestUrl = isServer && originMap ? mapRequestOriginUrl(req.url, originMap) : req.url;
+  if (typeof requestUrlTransformer === 'function') {
+    requestUrl = requestUrlTransformer(requestUrl);
+  }
 
   const storeKey = makeCacheKey(req, requestUrl);
   const response = transferState.get(storeKey, null);
